@@ -1,0 +1,54 @@
+---
+name: Go
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Check for vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  release:
+    name: Create GitHub Release
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.repository == 'acristoffers/foxglove-client-go' && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check that the tag matches the version file
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v$(cat version)" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match version file v$(cat version)"
+            exit 1
+          fi
+
+      # GitHub attaches the source tarball and zip to every release; a Go
+      # library has no binaries to add.
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
